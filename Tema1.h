@@ -12,6 +12,7 @@ namespace m1
         {
             glm::vec2 position;
             glm::vec2 targetPosition;
+            glm::vec2 handPosition;
             int type;
             int value;
             float scale;
@@ -41,6 +42,7 @@ namespace m1
         void RenderCard(const Card &card);
         void UpdateCard(Card &card, float deltaTimeSeconds);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
+        bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
 
      protected:
         glm::mat3 modelMatrix;
@@ -53,5 +55,9 @@ namespace m1
         float speed;
 
         Card card;
+        Card enemyCard;
+
+        bool isDragging;
+        glm::vec2 dragOffset;
     };
 }   // namespace m1

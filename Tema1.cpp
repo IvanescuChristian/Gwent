@@ -80,8 +80,19 @@ void Tema1::Init()
     card.targetPosition = card.position;
     card.type = 0;
     card.value = 4;
+    card.handPosition = card.position;
     card.scale = 1;
     card.angle = 0;
+
+    // Mirrored card in the opponent hand: same card, rotated 180 degrees
+    enemyCard = card;
+    enemyCard.position = glm::vec2(logicWidth / 2 - 65, enemyHandY);
+    enemyCard.targetPosition = enemyCard.position;
+    enemyCard.handPosition = enemyCard.position;
+    enemyCard.angle = glm::pi<float>();
+
+    isDragging = false;
+    dragOffset = glm::vec2(0, 0);
 }
 
 
@@ -102,8 +113,10 @@ void Tema1::FrameStart()
 void Tema1::Update(float deltaTimeSeconds)
 {
     UpdateCard(card, deltaTimeSeconds);
+    UpdateCard(enemyCard, deltaTimeSeconds);
 
     RenderBoard();
+    RenderCard(enemyCard);
     RenderCard(card);
 }
 
@@ -176,6 +189,17 @@ glm::vec2 Tema1::ScreenToWorld(int mouseX, int mouseY)
 }
 
 
+bool Tema1::IsMouseOverCard(const Card &card, glm::vec2 mousePosition)
+{
+    glm::vec2 halfSize = glm::vec2(cardWidth / 2, cardHeight / 2) * card.scale;
+
+    return mousePosition.x >= card.position.x - halfSize.x &&
+        mousePosition.x <= card.position.x + halfSize.x &&
+           mousePosition.y >= card.position.y - halfSize.y &&
+        mousePosition.y <= card.position.y + halfSize.y;
+}
+
+
 /*
  *  These are callback functions. To find more about callbacks and
  *  how they behave, see `input_controller.h`.
@@ -202,18 +226,37 @@ void Tema1::OnKeyRelease(int key, int mods)
 void Tema1::OnMouseMove(int mouseX, int mouseY, int deltaX, int deltaY)
 {
     // Add mouse move event
+    if (isDragging) {
+        // The card follows the cursor while it is dragged
+        card.position = ScreenToWorld(mouseX, mouseY) - dragOffset;
+        card.targetPosition = card.position;
+    }
 }
 
 
 void Tema1::OnMouseBtnPress(int mouseX, int mouseY, int button, int mods)
 {
     // Add mouse button press event
+    if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT)) {
+        glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
+
+        // Drag: start only if we clicked on our card
+        if (IsMouseOverCard(card, mousePosition)) {
+            isDragging = true;
+            dragOffset = mousePosition - card.position;
+        }
+    }
 }
 
 
 void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
 {
     // Add mouse button release event
+    if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT) && isDragging) {
+        // Drop: the card goes back to its place in our hand (UpdateCard moves it there)
+        isDragging = false;
+        card.targetPosition = card.handPosition;
+    }
 }
 
 
