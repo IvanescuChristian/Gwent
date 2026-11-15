@@ -1,6 +1,7 @@
 #pragma once
 
 #include "components/simple_scene.h"
+#include "components/text_renderer.h"
 
 
 namespace m1
@@ -8,6 +9,11 @@ namespace m1
     class Tema1 : public gfxc::SimpleScene
     {
      public:
+        struct CardState
+        {
+            bool isFlipped;
+        };
+
         struct Card
         {
             glm::vec2 position;
@@ -17,6 +23,7 @@ namespace m1
             int value;
             float scale;
             float angle;
+            CardState state;
         };
 
         Tema1();
@@ -39,7 +46,11 @@ namespace m1
         void OnWindowResize(int width, int height) override;
 
         void RenderBoard();
-        void RenderCard(const Card &card);
+        void RenderCard(const Card &card, bool isEnemy);
+        void RenderDeck();
+        void RenderHearts();
+        // Draw the heads-up display
+        void DrawHUD();
         void UpdateCard(Card &card, float deltaTimeSeconds);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
         bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
@@ -54,10 +65,20 @@ namespace m1
         float playerHandY, enemyHandY;
         float speed;
 
-        Card card;
-        Card enemyCard;
+        static const int kCardsInHand = 9;
+        Card playerCards[kCardsInHand];
+        Card enemyCards[kCardsInHand];
 
-        bool isDragging;
+        float cardGap;
+        float deckX, deckY;
+        float heartX, playerHeartY, enemyHeartY;
+
+        int draggedCard;
         glm::vec2 dragOffset;
+        glm::vec2 pressPosition;
+        float clickThreshold;
+
+        // The actual renderer object
+        gfxc::TextRenderer *textRenderer;
     };
 }   // namespace m1
