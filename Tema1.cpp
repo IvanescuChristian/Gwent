@@ -12,8 +12,11 @@ using namespace std;
 using namespace m1;
 
 
-Tema1::Player player = { 10, true, 9, 0 };
-Tema1::Player enemy = { 10, !player.isTurn, 9, 0 };
+Tema1::Player player;
+Tema1::Player enemy;
+
+bool FirstTime = true;
+float endTime = 0;
 
 
 /*
@@ -125,6 +128,33 @@ void Tema1::Init()
     Mesh* shieldUnit = tema1Object2D::CreateRectangle("shield_unit", glm::vec3(0, -unitHeight / 2, 0), unitWidth, unitHeight, glm::vec3(0.35f, 0.75f, 1.0f), true);
     AddMeshToList(shieldUnit);
 
+    flipDuration = 0.25f;
+    enemyStepDelay = 0.3f;
+
+    srand((unsigned int)time(NULL));
+
+    // Create the text renderer object
+    textRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
+
+    textRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 24);
+
+    cardTextRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
+
+    cardTextRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 10);
+
+    endTextRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
+
+    endTextRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 260);
+}
+
+
+void Tema1::WorldStart()
+{
+    player = { 10, true, 9, 0, false };
+    enemy = { 10, !player.isTurn, 9, 0, false };
+
+    endTime = 0;
+
     float handWidth = kCardsInHand * cardWidth + (kCardsInHand - 1) * cardGap;
     float firstCardX = (boardLeft + boardRight) / 2 - handWidth / 2 + cardWidth / 2;
 
@@ -134,12 +164,14 @@ void Tema1::Init()
         card.targetPosition = card.position;
         card.handPosition = card.position;
         card.type = i % 3;
-        card.value = 1;
+        card.value = (card.type == kDamage) ? 2 : 1;
         card.scale = 1;
         card.angle = 0;
         card.state.isFlipped = false;
         card.isOnTable = false;
         card.isHidden = false;
+        card.isFlipping = false;
+        card.flipTime = 0;
 
         Card &enemyCard = enemyCards[i];
         enemyCard = card;
@@ -165,19 +197,16 @@ void Tema1::Init()
     pressPosition = glm::vec2(0, 0);
 
     enemyTimer = 0;
-    enemyStepDelay = 0.3f;
     enemyFlipIndex = 0;
+}
 
-    srand((unsigned int)time(NULL));
 
-    // Create the text renderer object
-    textRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
-
-    textRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 24);
-
-    cardTextRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
-
-    cardTextRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 10);
+void Tema1::FlipCard(Card &card)
+{
+    if (!card.isFlipping) {
+        card.isFlipping = true;
+        card.flipTime = 0;
+    }
 }
 
 
@@ -197,6 +226,29 @@ void Tema1::FrameStart()
 
 void Tema1::Update(float deltaTimeSeconds)
 {
+    if (FirstTime) {
+        WorldStart();
+        FirstTime = false;
+    }
+
+    if (player.health <= 0) {
+        player.isDead = true;
+    }
+
+    if (enemy.health <= 0) {
+        enemy.isDead = true;
+    }
+
+    if (player.isDead || enemy.isDead) {
+        endTime += deltaTimeSeconds;
+
+        if (endTime > 10) {
+            WorldStart();
+        }
+
+        return;
+    }
+
     for (int i = 0; i < kCardsInHand; i++) {
         UpdateCard(playerCards[i], deltaTimeSeconds);
         UpdateCard(enemyCards[i], deltaTimeSeconds);
@@ -254,7 +306,14 @@ void Tema1::RenderCard(const Card &card, bool isEnemy)
     glm::mat3 cardMatrix = glm::mat3(1);
     cardMatrix *= tema1Transform2D::Translate(card.position.x, card.position.y);
     cardMatrix *= tema1Transform2D::Rotate(card.angle);
-    cardMatrix *= tema1Transform2D::Scale(card.scale, card.scale);
+
+    float flipScale = 1;
+
+    if (card.isFlipping) {
+        flipScale = glm::abs(glm::cos(glm::pi<float>() * card.flipTime / flipDuration));
+    }
+
+    cardMatrix *= tema1Transform2D::Scale(card.scale * flipScale, card.scale);
 
     if (!card.state.isFlipped) {
         if (isEnemy) {
@@ -288,6 +347,10 @@ void Tema1::RenderCard(const Card &card, bool isEnemy)
     RenderMesh2D(meshes["infinity"], shaders["VertexColor"], modelMatrix);
 
     RenderMesh2D(meshes["card_border"], shaders["VertexColor"], cardMatrix);
+
+    if (card.isFlipping) {
+        return;
+    }
 
     string durabilityText = "durability:";
     float textWidth = 0;
@@ -370,6 +433,20 @@ void Tema1::RenderLifeBar(const Player &owner, float y, float shieldY)
 
 void Tema1::DrawHUD()
 {
+    if (player.isDead || enemy.isDead) {
+        string endText = player.isDead ? "Loss" : "Win";
+        float textWidth = 0;
+
+        for (char c : endText) {
+            textWidth += (endTextRenderer->Characters[c].Advance >> 6);
+        }
+
+        float textHeight = (float)endTextRenderer->Characters['H'].Size.y;
+
+        endTextRenderer->RenderText(endText, logicWidth / 2 - textWidth / 2, logicHeight / 2 - textHeight / 2, 1.0f, glm::vec3(1, 1, 1));
+        return;
+    }
+
     glm::vec3 kGrey = glm::vec3(0.5f, 0.5f, 0.5f);
     float kAlpha = 0.5f;
     glm::vec3 kTurnColor = kAlpha * kGrey + (1 - kAlpha) * kBackgroundColor;
@@ -405,7 +482,7 @@ void Tema1::ApplyCard(const Card &card, Player &owner, Player &opponent)
 
 void Tema1::ApplyEffects()
 {
-    int order[3] = { kDamage, kHeal, kShield };
+    int order[3] = { kShield, kDamage, kHeal };
 
     for (int type : order) {
         for (int i = 0; i < kCardsInHand; i++) {
@@ -436,7 +513,7 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
     }
 
     if (enemyFlipIndex < kCardsInHand) {
-        enemyCards[enemyFlipIndex].state.isFlipped = true;
+        FlipCard(enemyCards[enemyFlipIndex]);
         enemyFlipIndex++;
         return;
     }
@@ -474,7 +551,7 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
 
         for (int i = 0; i < kCardsInHand; i++) {
             if (!enemyCards[i].isOnTable) {
-                enemyCards[i].state.isFlipped = false;
+                FlipCard(enemyCards[i]);
             }
         }
     }
@@ -510,6 +587,20 @@ void Tema1::UpdateCard(Card &card, float deltaTimeSeconds)
         card.position = card.targetPosition;
     } else {
         card.position += direction / distance * step;
+    }
+
+    if (card.isFlipping) {
+        float previousTime = card.flipTime;
+        card.flipTime += deltaTimeSeconds;
+
+        if (previousTime < flipDuration / 2 && card.flipTime >= flipDuration / 2) {
+            card.state.isFlipped = !card.state.isFlipped;
+        }
+
+        if (card.flipTime >= flipDuration) {
+            card.isFlipping = false;
+            card.flipTime = 0;
+        }
     }
 }
 
@@ -569,7 +660,7 @@ void Tema1::OnMouseMove(int mouseX, int mouseY, int deltaX, int deltaY)
 void Tema1::OnMouseBtnPress(int mouseX, int mouseY, int button, int mods)
 {
     // Add mouse button press event
-    if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT)) {
+    if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT) && !player.isDead && !enemy.isDead) {
         glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
 
         for (int i = 0; i < kCardsInHand; i++) {
@@ -592,7 +683,7 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
         glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
 
         if (glm::length(mousePosition - pressPosition) < clickThreshold) {
-            card.state.isFlipped = !card.state.isFlipped;
+            FlipCard(card);
             card.targetPosition = card.handPosition;
             draggedCard = -1;
             return;

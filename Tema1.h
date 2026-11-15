@@ -26,6 +26,8 @@ namespace m1
             CardState state;
             bool isOnTable;
             bool isHidden;
+            bool isFlipping;
+            float flipTime;
         };
 
         struct Player
@@ -34,6 +36,7 @@ namespace m1
             bool isTurn;
             int cardsLeft;
             int shield;
+            bool isDead;
         };
 
         Tema1();
@@ -55,6 +58,8 @@ namespace m1
         void OnMouseScroll(int mouseX, int mouseY, int offsetX, int offsetY) override;
         void OnWindowResize(int width, int height) override;
 
+        void WorldStart();
+        void FlipCard(Card &card);
         void RenderBoard();
         void RenderCard(const Card &card, bool isEnemy);
         void RenderSlots();
@@ -92,6 +97,7 @@ namespace m1
         static const int kMaxHealth = 10;
         static const int kMaxShield = 10;
 
+        float flipDuration;
         float cardGap;
         float stripeHeight;
         float deckX, deckY;
@@ -118,5 +124,6 @@ namespace m1
         // The actual renderer object
         gfxc::TextRenderer *textRenderer;
         gfxc::TextRenderer *cardTextRenderer;
+        gfxc::TextRenderer *endTextRenderer;
     };
 }   // namespace m1
