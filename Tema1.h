@@ -18,7 +18,6 @@ namespace m1
         {
             glm::vec2 position;
             glm::vec2 targetPosition;
-            glm::vec2 handPosition;
             int type;
             int value;
             float scale;
@@ -28,6 +27,14 @@ namespace m1
             bool isHidden;
             bool isFlipping;
             float flipTime;
+            bool isPermanent;
+            int durability;
+            int owner;
+            int handSpot;
+            int slot;
+            bool isInDeck;
+            bool isDestroyed;
+            bool flipOnArrival;
         };
 
         struct Player
@@ -37,6 +44,7 @@ namespace m1
             int cardsLeft;
             int shield;
             bool isDead;
+            bool warHorn;
         };
 
         Tema1();
@@ -61,18 +69,25 @@ namespace m1
         void WorldStart();
         void FlipCard(Card &card);
         void RenderBoard();
-        void RenderCard(const Card &card, bool isEnemy);
+        void RenderCard(const Card &card);
+        void RenderCardText(const Card &card, const glm::mat3 &cardMatrix, const std::string &text, float localY);
         void RenderSlots();
-        void RenderDeck();
+        void RenderDeck(int owner);
         void RenderHearts();
         void RenderLifeBar(const Player &owner, float y, float shieldY);
         // Draw the heads-up display
         void DrawHUD();
         void UpdateCard(Card &card, float deltaTimeSeconds);
+        void UpdateDeal(float deltaTimeSeconds);
         void UpdateEnemyTurn(float deltaTimeSeconds);
         void EndTurn();
+        void PlaceCard(int index, int slot);
+        void DestroyCard(Card &card);
+        void StealCard(int thief);
         void ApplyEffects();
-        void ApplyCard(const Card &card, Player &owner, Player &opponent);
+        void ApplyCard(Card &card, Player &owner, Player &opponent);
+        void EndRound();
+        Player &GetPlayer(int owner);
         int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
         bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
@@ -88,19 +103,26 @@ namespace m1
         float speed;
 
         static const int kCardsInHand = 9;
-        Card playerCards[kCardsInHand];
-        Card enemyCards[kCardsInHand];
+        static const int kTotalCards = 2 * kCardsInHand;
+        static const int kTypeCount = 7;
+        Card cards[kTotalCards];
 
         static const int kDamage = 0;
         static const int kHeal = 1;
         static const int kShield = 2;
+        static const int kSpy = 3;
+        static const int kFrost = 4;
+        static const int kClear = 5;
+        static const int kWarHorn = 6;
+        static const int kScorch = 7;
         static const int kMaxHealth = 10;
         static const int kMaxShield = 10;
 
         float flipDuration;
         float cardGap;
         float stripeHeight;
-        float deckX, deckY;
+        float deckX;
+        int deckSize;
         float heartX, playerHeartY, enemyHeartY;
         float unitWidth, unitHeight, unitGap;
 
@@ -109,14 +131,20 @@ namespace m1
         glm::vec2 pressPosition;
         float clickThreshold;
 
-        glm::vec2 playerSlots[kCardsInHand];
-        glm::vec2 enemySlots[kCardsInHand];
-        bool playerSlotTaken[kCardsInHand];
-        bool enemySlotTaken[kCardsInHand];
+        glm::vec2 handSpots[2][kCardsInHand];
+        int handSpotCard[2][kCardsInHand];
+        glm::vec2 slots[2][kCardsInHand];
+        bool slotTaken[2][kCardsInHand];
+        glm::vec2 deckPositions[2];
+
+        int dealIndex;
+        float dealTimer;
+        float dealDelay;
 
         float enemyTimer;
         float enemyStepDelay;
         int enemyFlipIndex;
+        int enemyPlacedCard;
 
         // Colors
         const glm::vec3 kBackgroundColor = glm::vec3(0.05f, 0.07f, 0.12f);
