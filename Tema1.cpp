@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
 
 #include "lab_m1/Tema1/transform2D.h"
 #include "lab_m1/Tema1/object2D.h"
@@ -10,9 +12,9 @@ using namespace std;
 using namespace m1;
 
 
-// Lives of each player, shown next to the hearts
-int playerLives = 10;
-int enemyLives = 10;
+// The two players: health is shown next to the hearts, the enemy's isTurn is always our negated value
+Tema1::Player player = { 10, true, 9 };
+Tema1::Player enemy = { 10, !player.isTurn, 9 };
 
 
 /*
@@ -94,7 +96,10 @@ void Tema1::Init()
     Mesh* cardBorder = tema1Object2D::CreateRectangle("card_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.1f, 0.1f, 0.1f));
     AddMeshToList(cardBorder);
 
-    Mesh* heart = tema1Object2D::CreateTriangle("heart", glm::vec3(0, 0, 0), 40, glm::vec3(0.9f, 0.1f, 0.15f), true);
+    Mesh* slotBorder = tema1Object2D::CreateRectangle("slot_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.25f, 0.32f, 0.45f));
+    AddMeshToList(slotBorder);
+
+    Mesh* heart =tema1Object2D::CreateTriangle("heart", glm::vec3(0, 0, 0), 40, glm::vec3(0.9f, 0.1f, 0.15f), true);
     AddMeshToList(heart);
 
     // The hand: 9 cards, one next to another, centered under the board
@@ -111,6 +116,7 @@ void Tema1::Init()
         card.scale = 1;
         card.angle = 0;
         card.state.isFlipped = false;
+        card.isOnTable = false;
 
         // Mirrored card in the opponent hand: same card, rotated 180 degrees
         Card &enemyCard = enemyCards[i];
@@ -121,9 +127,26 @@ void Tema1::Init()
         enemyCard.angle = glm::pi<float>();
     }
 
+    // The table: 9 slots per player, spread over the width of the board
+    float slotSpacing = (boardRight - boardLeft) / kCardsInHand;
+
+    for (int i = 0; i < kCardsInHand; i++) {
+        float slotX = boardLeft + (i + 0.5f) * slotSpacing;
+        playerSlots[i] = glm::vec2(slotX, (boardBottom + boardMiddle) / 2);
+        enemySlots[i] = glm::vec2(slotX, (boardMiddle + boardTop) / 2);
+        playerSlotTaken[i] = false;
+        enemySlotTaken[i] = false;
+    }
+
     draggedCard = -1;
     dragOffset = glm::vec2(0, 0);
     pressPosition = glm::vec2(0, 0);
+
+    enemyTimer = 0;
+    enemyStepDelay = 0.3f;
+    enemyFlipIndex = 0;
+
+    srand((unsigned int)time(NULL));
 
     // Create the text renderer object
     textRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
@@ -135,7 +158,7 @@ void Tema1::Init()
 void Tema1::FrameStart()
 {
     // Clears the color buffer (using the previously set color) and depth buffer
-    glClearColor(0.05f, 0.07f, 0.12f, 1);
+    glClearColor(kBackgroundColor.r, kBackgroundColor.g, kBackgroundColor.b, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glm::ivec2 resolution = window->GetResolution();
@@ -153,7 +176,12 @@ void Tema1::Update(float deltaTimeSeconds)
         UpdateCard(enemyCards[i], deltaTimeSeconds);
     }
 
+    if (enemy.isTurn) {
+        UpdateEnemyTurn(deltaTimeSeconds);
+    }
+
     RenderBoard();
+    RenderSlots();
     RenderDeck();
     RenderHearts();
 
@@ -216,6 +244,20 @@ void Tema1::RenderCard(const Card &card, bool isEnemy)
 }
 
 
+void Tema1::RenderSlots()
+{
+    for (int i = 0; i < kCardsInHand; i++) {
+        modelMatrix = glm::mat3(1);
+        modelMatrix *= tema1Transform2D::Translate(playerSlots[i].x, playerSlots[i].y);
+        RenderMesh2D(meshes["slot_border"], shaders["VertexColor"], modelMatrix);
+
+        modelMatrix = glm::mat3(1);
+        modelMatrix *= tema1Transform2D::Translate(enemySlots[i].x, enemySlots[i].y);
+        RenderMesh2D(meshes["slot_border"], shaders["VertexColor"], modelMatrix);
+    }
+}
+
+
 void Tema1::RenderDeck()
 {
     // Just a visual stack of cards, each one slightly offset from the one below
@@ -251,8 +293,107 @@ void Tema1::DrawHUD()
     glm::vec3 kTextColor = glm::vec3(1, 1, 1);
     float textX = heartX + 30;
 
-    textRenderer->RenderText(to_string(playerLives), textX, logicHeight - playerHeartY - 12, 1.0f, kTextColor);
-    textRenderer->RenderText(to_string(enemyLives), textX, logicHeight - enemyHeartY - 12, 1.0f, kTextColor);
+    textRenderer->RenderText(to_string(player.health), textX, logicHeight - playerHeartY - 12, 1.0f, kTextColor);
+    textRenderer->RenderText(to_string(enemy.health), textX, logicHeight - enemyHeartY - 12, 1.0f, kTextColor);
+
+    // Whose turn it is, top right. Grey with alpha 0.5: the text renderer only takes an RGB color,
+    // so the grey is blended by hand with the background it is drawn over
+    glm::vec3 kGrey = glm::vec3(0.5f, 0.5f, 0.5f);
+    float kAlpha = 0.5f;
+    glm::vec3 kTurnColor = kAlpha * kGrey + (1 - kAlpha) * kBackgroundColor;
+    string turnText = player.isTurn ? "Players turn" : "Enemys turn";
+
+    textRenderer->RenderText(turnText, logicWidth - 200, 20, 1.0f, kTurnColor);
+}
+
+
+void Tema1::EndTurn()
+{
+    player.isTurn = !player.isTurn;
+    enemy.isTurn = !player.isTurn;
+
+    enemyTimer = 0;
+    enemyFlipIndex = 0;
+}
+
+
+void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
+{
+    // One step every enemyStepDelay seconds
+    enemyTimer += deltaTimeSeconds;
+    if (enemyTimer < enemyStepDelay) {
+        return;
+    }
+    enemyTimer = 0;
+
+    // First the cards in hand flip one by one, left to right
+    while (enemyFlipIndex < kCardsInHand && enemyCards[enemyFlipIndex].isOnTable) {
+        enemyFlipIndex++;
+    }
+
+    if (enemyFlipIndex < kCardsInHand) {
+        enemyCards[enemyFlipIndex].state.isFlipped = true;
+        enemyFlipIndex++;
+        return;
+    }
+
+    // Then a random card (1 in cardsLeft) goes into a random free slot
+    if (enemy.cardsLeft > 0) {
+        // Pick the n-th card still in hand and the m-th free slot (free slots = cards left in hand)
+        int n = rand() % enemy.cardsLeft;
+        int m = rand() % enemy.cardsLeft;
+        int chosenCard = -1;
+        int chosenSlot = -1;
+
+        for (int i = 0; i < kCardsInHand && chosenCard == -1; i++) {
+            if (!enemyCards[i].isOnTable) {
+                if (n == 0) {
+                    chosenCard = i;
+                }
+                n--;
+            }
+        }
+
+        for (int i = 0; i < kCardsInHand && chosenSlot == -1; i++) {
+            if (!enemySlotTaken[i]) {
+                if (m == 0) {
+                    chosenSlot = i;
+                }
+                m--;
+            }
+        }
+
+        Card &card = enemyCards[chosenCard];
+        card.targetPosition = enemySlots[chosenSlot];
+        card.isOnTable = true;
+        enemySlotTaken[chosenSlot] = true;
+        enemy.cardsLeft--;
+
+        // The cards left in hand go back face down
+        for (int i = 0; i < kCardsInHand; i++) {
+            if (!enemyCards[i].isOnTable) {
+                enemyCards[i].state.isFlipped = false;
+            }
+        }
+    }
+
+    EndTurn();
+}
+
+
+int Tema1::GetFreeSlotUnderMouse(glm::vec2 mousePosition)
+{
+    for (int i = 0; i < kCardsInHand; i++) {
+        if (!playerSlotTaken[i] &&
+            mousePosition.x >= playerSlots[i].x - cardWidth / 2 &&
+            mousePosition.x <= playerSlots[i].x + cardWidth / 2 &&
+            mousePosition.y >= playerSlots[i].y - cardHeight / 2 &&
+            mousePosition.y <= playerSlots[i].y + cardHeight / 2) {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 
@@ -329,9 +470,10 @@ void Tema1::OnMouseBtnPress(int mouseX, int mouseY, int button, int mods)
     if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT)) {
         glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
 
-        // Drag: start only if we clicked on one of our cards (the enemy cards can't be clicked)
+        // Drag: start only if we clicked on one of our cards in hand
+        // (the enemy cards and the cards on the table can't be clicked)
         for (int i = 0; i < kCardsInHand; i++) {
-            if (IsMouseOverCard(playerCards[i], mousePosition)) {
+            if (!playerCards[i].isOnTable && IsMouseOverCard(playerCards[i], mousePosition)) {
                 draggedCard = i;
                 dragOffset = mousePosition - playerCards[i].position;
                 pressPosition = mousePosition;
@@ -352,9 +494,25 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
         // Click (the mouse barely moved): the card switches sides
         if (glm::length(mousePosition - pressPosition) < clickThreshold) {
             card.state.isFlipped = !card.state.isFlipped;
+            card.targetPosition = card.handPosition;
+            draggedCard = -1;
+            return;
         }
 
-        // Drop: the card goes back to its place in our hand (UpdateCard moves it there)
+        // Drop on a free slot during our turn: the card goes on the table and the turn ends
+        int slot = GetFreeSlotUnderMouse(mousePosition);
+
+        if (player.isTurn && slot != -1) {
+            card.targetPosition = playerSlots[slot];
+            card.isOnTable = true;
+            playerSlotTaken[slot] = true;
+            player.cardsLeft--;
+            draggedCard = -1;
+            EndTurn();
+            return;
+        }
+
+        // Drop anywhere else: the card goes back to its place in our hand (UpdateCard moves it there)
         card.targetPosition = card.handPosition;
         draggedCard = -1;
     }

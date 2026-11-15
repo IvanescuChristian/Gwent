@@ -24,6 +24,14 @@ namespace m1
             float scale;
             float angle;
             CardState state;
+            bool isOnTable;
+        };
+
+        struct Player
+        {
+            int health;
+            bool isTurn;
+            int cardsLeft;
         };
 
         Tema1();
@@ -47,8 +55,12 @@ namespace m1
 
         void RenderBoard();
         void RenderCard(const Card &card, bool isEnemy);
+        void RenderSlots();
         void RenderDeck();
         void RenderHearts();
+        void UpdateEnemyTurn(float deltaTimeSeconds);
+        void EndTurn();
+        int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
         // Draw the heads-up display
         void DrawHUD();
         void UpdateCard(Card &card, float deltaTimeSeconds);
@@ -77,6 +89,20 @@ namespace m1
         glm::vec2 dragOffset;
         glm::vec2 pressPosition;
         float clickThreshold;
+
+        // The 9 slots on the table for each player
+        glm::vec2 playerSlots[kCardsInHand];
+        glm::vec2 enemySlots[kCardsInHand];
+        bool playerSlotTaken[kCardsInHand];
+        bool enemySlotTaken[kCardsInHand];
+
+        // Simulated enemy turn: flips its cards one by one, then places a random one
+        float enemyTimer;
+        float enemyStepDelay;
+        int enemyFlipIndex;
+
+        // Colors
+        const glm::vec3 kBackgroundColor = glm::vec3(0.05f, 0.07f, 0.12f);
 
         // The actual renderer object
         gfxc::TextRenderer *textRenderer;
