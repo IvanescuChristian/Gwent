@@ -96,3 +96,4 @@ Mesh* tema1Object2D::CreateTriangle(
     triangle->InitFromData(vertices, indices);
     return triangle;
 }
+
