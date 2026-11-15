@@ -146,7 +146,10 @@ void Tema1::Init()
         AddMeshToList(symbolBar);
     }
 
-    Mesh* valueSquare = tema1Object2D::CreateSquare("value_square", glm::vec3(-3, -3, 0), 6, glm::vec3(0.15f, 0.15f, 0.15f), true);
+    Mesh* nameBorder = tema1Object2D::CreateRectangle("name_border", glm::vec3(0, 0, 0), 1, 1, glm::vec3(0.1f, 0.1f, 0.1f));
+    AddMeshToList(nameBorder);
+
+    Mesh* valueSquare =tema1Object2D::CreateSquare("value_square", glm::vec3(-3, -3, 0), 6, glm::vec3(0.15f, 0.15f, 0.15f), true);
     AddMeshToList(valueSquare);
 
     Mesh* infinity =tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
@@ -188,6 +191,8 @@ void Tema1::WorldStart()
 
     endTime = 0;
 
+    string typeNames[kTypeCount] = { "Damage", "Heal", "Shield", "Spy", "Frost", "Clear", "War Horn", "Scorch" };
+
     for (int owner = 0; owner < 2; owner++) {
         for (int i = 0; i < kCardsInHand; i++) {
             Card &card = cards[owner * kCardsInHand + i];
@@ -206,6 +211,9 @@ void Tema1::WorldStart()
             card.value = (card.type == kDamage || card.type == kScorch) ? 2 : 1;
             card.roundPlaced = -1;
             card.isCancelled = false;
+            card.name = typeNames[card.type];
+            card.isHorned = false;
+            card.effectValue = 0;
             card.durability = card.isPermanent ? -1 : 3;
             card.scale = 1;
             card.angle = (owner == 1) ? glm::pi<float>() : 0;
@@ -434,7 +442,9 @@ void Tema1::RenderCard(const Card &card)
 
     RenderSymbol(card.type, cardMatrix);
 
-    for (int i = 0; i < card.value && i < 10; i++) {
+    int shownValue = card.value * (card.isHorned ? 2 : 1);
+
+    for (int i = 0; i < shownValue && i < 10; i++) {
         modelMatrix = cardMatrix;
         modelMatrix *= tema1Transform2D::Translate((i < 5) ? -33.0f : 33.0f, 46.0f - (i % 5) * 8);
         RenderMesh2D(meshes["value_square"], shaders["VertexColor"], modelMatrix);
@@ -452,6 +462,7 @@ void Tema1::RenderCard(const Card &card)
         return;
     }
 
+    RenderCardName(card, cardMatrix);
     RenderCardText(card, cardMatrix, "durability:", -22);
 
     if (!card.isPermanent) {
@@ -464,7 +475,7 @@ void Tema1::RenderSymbol(int type, const glm::mat3 &cardMatrix)
 {
     string id = to_string(type);
     glm::mat3 symbolMatrix = cardMatrix;
-    symbolMatrix *= tema1Transform2D::Translate(0, 32);
+    symbolMatrix *= tema1Transform2D::Translate(0, 26);
 
     if (type == kDamage) {
         RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], symbolMatrix);
@@ -503,6 +514,33 @@ void Tema1::RenderSymbol(int type, const glm::mat3 &cardMatrix)
         modelMatrix *= tema1Transform2D::Scale(0.5f, 0.5f);
         RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], modelMatrix);
     }
+}
+
+
+void Tema1::RenderCardName(const Card &card, const glm::mat3 &cardMatrix)
+{
+    float textWidth = 0;
+
+    for (char c : card.name) {
+        textWidth += (cardTextRenderer->Characters[c].Advance >> 6);
+    }
+
+    float borderWidth = textWidth + 4;
+    float borderHeight = 11;
+    float borderRight = cardWidth / 2 - 3;
+    float borderBottom = cardHeight / 2 - stripeHeight - 1 - borderHeight;
+
+    modelMatrix = cardMatrix;
+    modelMatrix *= tema1Transform2D::Translate(borderRight - borderWidth, borderBottom);
+    modelMatrix *= tema1Transform2D::Scale(borderWidth, borderHeight);
+    RenderMesh2D(meshes["name_border"], shaders["VertexColor"], modelMatrix);
+
+    glm::vec3 corner1 = cardMatrix * glm::vec3(borderRight - borderWidth, borderBottom + borderHeight, 1);
+    glm::vec3 corner2 = cardMatrix * glm::vec3(borderRight, borderBottom, 1);
+    float left = min(corner1.x, corner2.x);
+    float top = max(corner1.y, corner2.y);
+
+    cardTextRenderer->RenderText(card.name, left + 2, logicHeight - top + 2, 1.0f, glm::vec3(0, 0, 0));
 }
 
 
@@ -641,7 +679,7 @@ void Tema1::PlaceCard(int index, int slot)
     owner.cardsLeft--;
 
     if (owner.warHorn) {
-        card.value *= 2;
+        card.isHorned = true;
         owner.warHorn = false;
     }
 
@@ -765,35 +803,82 @@ void Tema1::StealCard(int thief)
 void Tema1::ApplyCard(Card &card, Player &owner, Player &opponent)
 {
     if (card.type == kScorch) {
+        int scorchValue = card.value * (card.isHorned ? 2 : 1);
+
         for (int i = 0; i < kTotalCards; i++) {
             Card &target = cards[i];
+            int targetValue = target.value * (target.isHorned ? 2 : 1);
 
-            if (target.isOnTable && target.owner != card.owner && target.roundPlaced == roundNumber && target.value >= card.value) {
+            if (target.isOnTable && target.owner != card.owner && target.roundPlaced == roundNumber && targetValue >= scorchValue) {
                 target.isCancelled = true;
             }
         }
     } else if (card.type == kSpy) {
-        StealCard(card.owner);
+        for (int i = 0; i < card.effectValue; i++) {
+            StealCard(card.owner);
+        }
     } else if (card.type == kClear) {
         for (int i = 0; i < kTotalCards; i++) {
             if (cards[i].isOnTable && cards[i].type == kFrost) {
                 DestroyCard(cards[i]);
             }
         }
-    } else if (card.type == kFrost) {
-        for (int i = 0; i < kTotalCards; i++) {
-            if (cards[i].isOnTable && cards[i].owner != card.owner) {
-                cards[i].value--;
-            }
-        }
     } else if (card.type == kWarHorn) {
-        owner.warHorn = true;
+        if (card.effectValue > 0) {
+            owner.warHorn = true;
+        }
     } else if (card.type == kShield) {
-        owner.shieldRegen += card.value;
+        owner.shieldRegen += card.effectValue;
     } else if (card.type == kDamage) {
-        owner.damage += card.value;
+        owner.damage += card.effectValue;
     } else if (card.type == kHeal) {
-        owner.regen += card.value;
+        owner.regen += card.effectValue;
+    }
+}
+
+
+void Tema1::ComputeEffectValues()
+{
+    bool clearActive = false;
+    int frostCount[2] = { 0, 0 };
+    int frostPower[2] = { 0, 0 };
+
+    for (int i = 0; i < kTotalCards; i++) {
+        if (cards[i].isOnTable && !cards[i].isCancelled && cards[i].type == kClear) {
+            clearActive = true;
+        }
+    }
+
+    for (int i = 0; i < kTotalCards; i++) {
+        if (cards[i].isOnTable && !cards[i].isCancelled && cards[i].type == kFrost && !clearActive) {
+            frostCount[cards[i].owner]++;
+        }
+    }
+
+    for (int i = 0; i < kTotalCards; i++) {
+        Card &card = cards[i];
+
+        if (card.isOnTable && !card.isCancelled && card.type == kFrost) {
+            int horn = card.isHorned ? 2 : 1;
+            card.effectValue = clearActive ? 0 : max(0, card.value - frostCount[1 - card.owner]) * horn;
+            frostPower[card.owner] += card.effectValue;
+        }
+    }
+
+    for (int i = 0; i < kTotalCards; i++) {
+        Card &card = cards[i];
+
+        if (!card.isOnTable || card.isCancelled || card.type == kFrost) {
+            continue;
+        }
+
+        int horn = card.isHorned ? 2 : 1;
+
+        if (card.type == kScorch || card.type == kClear) {
+            card.effectValue = card.value * horn;
+        } else {
+            card.effectValue = max(0, card.value - frostPower[1 - card.owner]) * horn;
+        }
     }
 }
 
@@ -804,6 +889,7 @@ void Tema1::ApplyEffects()
 
     for (int i = 0; i < kTotalCards; i++) {
         cards[i].isCancelled = false;
+        cards[i].effectValue = 0;
     }
 
     for (int owner = 0; owner < 2; owner++) {
@@ -823,10 +909,8 @@ void Tema1::ApplyEffects()
             }
         }
 
-        for (int i = 0; i < kTotalCards; i++) {
-            if (cards[i].isOnTable && cards[i].value <= 0) {
-                DestroyCard(cards[i]);
-            }
+        if (type == kScorch) {
+            ComputeEffectValues();
         }
 
         for (int owner = 0; owner < 2; owner++) {

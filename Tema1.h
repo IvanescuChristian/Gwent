@@ -38,6 +38,9 @@ namespace m1
             bool flipOnArrival;
             int roundPlaced;
             bool isCancelled;
+            std::string name;
+            bool isHorned;
+            int effectValue;
         };
 
         struct Player
@@ -93,6 +96,8 @@ namespace m1
         void DestroyCard(Card &card);
         void StealCard(int thief);
         void ApplyEffects();
+        void ComputeEffectValues();
+        void RenderCardName(const Card &card, const glm::mat3 &cardMatrix);
         void ApplyCard(Card &card, Player &owner, Player &opponent);
         void EndRound();
         Player &GetPlayer(int owner);
