@@ -95,6 +95,7 @@ namespace m1
         Player &GetPlayer(int owner);
         int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
         int GetFirstFreeSlot(int owner);
+        bool IsFinished(int owner);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
         bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
 

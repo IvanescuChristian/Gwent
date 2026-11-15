@@ -284,7 +284,7 @@ void Tema1::Update(float deltaTimeSeconds)
         enemy.isDead = true;
     }
 
-    if (dealIndex == kTotalCards && player.isTurn && player.cardsLeft == 0 && enemy.cardsLeft == 0 &&
+    if (dealIndex == kTotalCards && player.isTurn && IsFinished(0) && IsFinished(1) &&
         !player.isDead && !enemy.isDead) {
         int playerTotal = player.health + player.shield;
         int enemyTotal = enemy.health + enemy.shield;
@@ -316,7 +316,7 @@ void Tema1::Update(float deltaTimeSeconds)
         UpdateDeal(deltaTimeSeconds);
     } else if (enemy.isTurn) {
         UpdateEnemyTurn(deltaTimeSeconds);
-    } else if (player.cardsLeft == 0 && enemy.cardsLeft > 0 && draggedCard == -1) {
+    } else if (IsFinished(0) && !IsFinished(1) && draggedCard == -1) {
         EndTurn();
     }
 
@@ -876,7 +876,7 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         enemyFlipIndex++;
     }
 
-    if (enemyFlipIndex < kCardsInHand) {
+    if (enemyFlipIndex < kCardsInHand && !IsFinished(1)) {
         FlipCard(cards[handSpotCard[1][enemyFlipIndex]]);
         enemyFlipIndex++;
         return;
@@ -933,6 +933,12 @@ int Tema1::GetFirstFreeSlot(int owner)
     }
 
     return -1;
+}
+
+
+bool Tema1::IsFinished(int owner)
+{
+    return GetPlayer(owner).cardsLeft == 0 || GetFirstFreeSlot(owner) == -1;
 }
 
 
@@ -1021,6 +1027,11 @@ void Tema1::OnInputUpdate(float deltaTime, int mods)
 void Tema1::OnKeyPress(int key, int mods)
 {
     // Add key press event
+    if (key == GLFW_KEY_ENTER) {
+        if (player.isDead || enemy.isDead) {
+            endTime += 10;
+        }
+    }
 }
 
 
