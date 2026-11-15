@@ -152,9 +152,6 @@ void Tema1::Init()
     Mesh* valueSquare =tema1Object2D::CreateSquare("value_square", glm::vec3(-3, -3, 0), 6, glm::vec3(0.15f, 0.15f, 0.15f), true);
     AddMeshToList(valueSquare);
 
-    Mesh* infinity =tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
-    AddMeshToList(infinity);
-
     Mesh* slotBorder = tema1Object2D::CreateRectangle("slot_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.25f, 0.32f, 0.45f));
     AddMeshToList(slotBorder);
 
@@ -450,12 +447,6 @@ void Tema1::RenderCard(const Card &card)
         RenderMesh2D(meshes["value_square"], shaders["VertexColor"], modelMatrix);
     }
 
-    if (card.isPermanent) {
-        modelMatrix = cardMatrix;
-        modelMatrix *= tema1Transform2D::Translate(0, -42);
-        RenderMesh2D(meshes["infinity"], shaders["VertexColor"], modelMatrix);
-    }
-
     RenderMesh2D(meshes["card_border"], shaders["VertexColor"], cardMatrix);
 
     if (card.isFlipping) {
@@ -465,9 +456,7 @@ void Tema1::RenderCard(const Card &card)
     RenderCardName(card, cardMatrix);
     RenderCardText(card, cardMatrix, "durability:", -22);
 
-    if (!card.isPermanent) {
-        RenderCardText(card, cardMatrix, to_string(card.durability), -37);
-    }
+    RenderCardText(card, cardMatrix, card.isPermanent ? "inf" : to_string(card.durability), -37);
 }
 
 

@@ -13,5 +13,4 @@ namespace tema1Object2D
     Mesh* CreateSquare(const std::string &name, glm::vec3 leftBottomCorner, float length, glm::vec3 color, bool fill = false);
     Mesh* CreateRectangle(const std::string &name, glm::vec3 leftBottomCorner, float width, float height, glm::vec3 color, bool fill = false);
     Mesh* CreateTriangle(const std::string &name, glm::vec3 center, float size, glm::vec3 color, bool fill = false);
-    Mesh* CreateInfinity(const std::string &name, glm::vec3 center, float size, glm::vec3 color);
 }
