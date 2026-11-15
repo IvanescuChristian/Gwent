@@ -35,6 +35,8 @@ namespace m1
             bool isInDeck;
             bool isDestroyed;
             bool flipOnArrival;
+            int roundPlaced;
+            bool isCancelled;
         };
 
         struct Player
@@ -89,6 +91,7 @@ namespace m1
         void EndRound();
         Player &GetPlayer(int owner);
         int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
+        int GetFirstFreeSlot(int owner);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
         bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
 
@@ -104,7 +107,7 @@ namespace m1
 
         static const int kCardsInHand = 9;
         static const int kTotalCards = 2 * kCardsInHand;
-        static const int kTypeCount = 7;
+        static const int kTypeCount = 8;
         Card cards[kTotalCards];
 
         static const int kDamage = 0;
@@ -145,6 +148,7 @@ namespace m1
         float enemyStepDelay;
         int enemyFlipIndex;
         int enemyPlacedCard;
+        int roundNumber;
 
         // Colors
         const glm::vec3 kBackgroundColor = glm::vec3(0.05f, 0.07f, 0.12f);

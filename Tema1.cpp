@@ -145,7 +145,10 @@ void Tema1::Init()
     Mesh* stripeWarHorn = tema1Object2D::CreateRectangle("stripe_war_horn", stripeCorner, cardWidth, stripeHeight, glm::vec3(1.0f, 0.55f, 0.10f), true);
     AddMeshToList(stripeWarHorn);
 
-    Mesh* infinity = tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
+    Mesh* stripeScorch = tema1Object2D::CreateRectangle("stripe_scorch", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.60f, 0.20f, 0.80f), true);
+    AddMeshToList(stripeScorch);
+
+    Mesh* infinity =tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
     AddMeshToList(infinity);
 
     Mesh* slotBorder = tema1Object2D::CreateRectangle("slot_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.25f, 0.32f, 0.45f));
@@ -191,7 +194,9 @@ void Tema1::WorldStart()
             card.targetPosition = card.position;
             card.type = i % kTypeCount;
             card.isPermanent = card.type == kDamage || card.type == kHeal || card.type == kShield;
-            card.value = (card.type == kDamage) ? 2 : 1;
+            card.value = (card.type == kDamage || card.type == kScorch) ? 2 : 1;
+            card.roundPlaced = -1;
+            card.isCancelled = false;
             card.durability = card.isPermanent ? -1 : 3;
             card.scale = 1;
             card.angle = (owner == 1) ? glm::pi<float>() : 0;
@@ -222,6 +227,7 @@ void Tema1::WorldStart()
     enemyTimer = 0;
     enemyFlipIndex = 0;
     enemyPlacedCard = -1;
+    roundNumber = 0;
 }
 
 
@@ -409,7 +415,7 @@ void Tema1::RenderCard(const Card &card)
         return;
     }
 
-    string stripeNames[kTypeCount] = { "stripe_damage", "stripe_heal", "stripe_shield", "stripe_spy", "stripe_frost", "stripe_clear", "stripe_war_horn" };
+    string stripeNames[kTypeCount] = { "stripe_damage", "stripe_heal", "stripe_shield", "stripe_spy", "stripe_frost", "stripe_clear", "stripe_war_horn", "stripe_scorch" };
     float stripeY[3] = { cardHeight / 2 - stripeHeight / 2, 0, -cardHeight / 2 + stripeHeight / 2 };
 
     for (int i = 0; i < 3; i++) {
@@ -569,6 +575,7 @@ void Tema1::PlaceCard(int index, int slot)
     card.isHidden = false;
     card.targetPosition = slots[card.owner][slot];
     slotTaken[card.owner][slot] = true;
+    card.roundPlaced = roundNumber;
     owner.cardsLeft--;
 
     if (owner.warHorn) {
@@ -644,7 +651,15 @@ void Tema1::StealCard(int thief)
 
 void Tema1::ApplyCard(Card &card, Player &owner, Player &opponent)
 {
-    if (card.type == kSpy) {
+    if (card.type == kScorch) {
+        for (int i = 0; i < kTotalCards; i++) {
+            Card &target = cards[i];
+
+            if (target.isOnTable && target.owner != card.owner && target.roundPlaced == roundNumber && target.value >= card.value) {
+                target.isCancelled = true;
+            }
+        }
+    } else if (card.type == kSpy) {
         StealCard(card.owner);
     } else if (card.type == kClear) {
         for (int i = 0; i < kTotalCards; i++) {
@@ -680,12 +695,16 @@ void Tema1::ApplyEffects()
 {
     int order[8] = { kScorch, kSpy, kClear, kFrost, kWarHorn, kShield, kDamage, kHeal };
 
+    for (int i = 0; i < kTotalCards; i++) {
+        cards[i].isCancelled = false;
+    }
+
     for (int type : order) {
         for (int owner = 0; owner < 2; owner++) {
             for (int i = 0; i < kTotalCards; i++) {
                 Card &card = cards[i];
 
-                if (card.isOnTable && card.owner == owner && card.type == type) {
+                if (card.isOnTable && !card.isCancelled && card.owner == owner && card.type == type) {
                     ApplyCard(card, GetPlayer(owner), GetPlayer(1 - owner));
                 }
             }
@@ -713,6 +732,8 @@ void Tema1::EndRound()
             }
         }
     }
+
+    roundNumber++;
 }
 
 
@@ -748,19 +769,11 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         return;
     }
 
-    int freeSlots = 0;
+    int chosenSlot = GetFirstFreeSlot(1);
 
-    for (int i = 0; i < kCardsInHand; i++) {
-        if (!slotTaken[1][i]) {
-            freeSlots++;
-        }
-    }
-
-    if (enemy.cardsLeft > 0 && freeSlots > 0) {
+    if (enemy.cardsLeft > 0 && chosenSlot != -1) {
         int n = rand() % enemy.cardsLeft;
-        int m = rand() % freeSlots;
         int chosenCard = -1;
-        int chosenSlot = -1;
 
         for (int i = 0; i < kCardsInHand && chosenCard == -1; i++) {
             if (handSpotCard[1][i] != -1) {
@@ -768,15 +781,6 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
                     chosenCard = handSpotCard[1][i];
                 }
                 n--;
-            }
-        }
-
-        for (int i = 0; i < kCardsInHand && chosenSlot == -1; i++) {
-            if (!slotTaken[1][i]) {
-                if (m == 0) {
-                    chosenSlot = i;
-                }
-                m--;
             }
         }
 
@@ -804,6 +808,18 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         EndRound();
         EndTurn();
     }
+}
+
+
+int Tema1::GetFirstFreeSlot(int owner)
+{
+    for (int i = 0; i < kCardsInHand; i++) {
+        if (!slotTaken[owner][i]) {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 
@@ -947,6 +963,13 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
         }
 
         int slot = GetFreeSlotUnderMouse(mousePosition);
+
+        bool overEnemySide = mousePosition.x >= boardLeft && mousePosition.x <= boardRight &&
+            mousePosition.y >= boardMiddle && mousePosition.y <= boardTop;
+
+        if (slot == -1 && overEnemySide) {
+            slot = GetFirstFreeSlot(0);
+        }
 
         if (player.isTurn && slot != -1) {
             PlaceCard(draggedCard, slot);
