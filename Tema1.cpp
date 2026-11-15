@@ -183,8 +183,8 @@ void Tema1::Init()
 
 void Tema1::WorldStart()
 {
-    player = { 10, true, kCardsInHand, 0, false, false };
-    enemy = { 10, !player.isTurn, kCardsInHand, 0, false, false };
+    player = { 10, true, kCardsInHand, 0, false, false, 0, 0, 0 };
+    enemy = { 10, !player.isTurn, kCardsInHand, 0, false, false, 0, 0, 0 };
 
     endTime = 0;
 
@@ -789,17 +789,11 @@ void Tema1::ApplyCard(Card &card, Player &owner, Player &opponent)
     } else if (card.type == kWarHorn) {
         owner.warHorn = true;
     } else if (card.type == kShield) {
-        owner.shield = min(kMaxShield, owner.shield + card.value);
+        owner.shieldRegen += card.value;
     } else if (card.type == kDamage) {
-        for (int i = 0; i < card.value; i++) {
-            if (opponent.shield > 0) {
-                opponent.shield--;
-            } else {
-                opponent.health = max(0, opponent.health - 1);
-            }
-        }
+        owner.damage += card.value;
     } else if (card.type == kHeal) {
-        owner.health = min(kMaxHealth, owner.health + card.value);
+        owner.regen += card.value;
     }
 }
 
@@ -810,6 +804,12 @@ void Tema1::ApplyEffects()
 
     for (int i = 0; i < kTotalCards; i++) {
         cards[i].isCancelled = false;
+    }
+
+    for (int owner = 0; owner < 2; owner++) {
+        GetPlayer(owner).damage = 0;
+        GetPlayer(owner).regen = 0;
+        GetPlayer(owner).shieldRegen = 0;
     }
 
     for (int type : order) {
@@ -827,6 +827,26 @@ void Tema1::ApplyEffects()
             if (cards[i].isOnTable && cards[i].value <= 0) {
                 DestroyCard(cards[i]);
             }
+        }
+
+        for (int owner = 0; owner < 2; owner++) {
+            Player &self = GetPlayer(owner);
+            Player &opponent = GetPlayer(1 - owner);
+
+            if (type == kShield) {
+                self.shield = min(kMaxShield, self.shield + self.shieldRegen);
+            } else if (type == kDamage) {
+                int blocked = min(opponent.shield, self.damage);
+                opponent.shield -= blocked;
+                opponent.health = max(0, opponent.health - (self.damage - blocked));
+            } else if (type == kHeal && !self.isDead) {
+                self.health = min(kMaxHealth, self.health + self.regen);
+            }
+        }
+
+        if (type == kDamage) {
+            player.isDead = player.health <= 0;
+            enemy.isDead = enemy.health <= 0;
         }
     }
 }

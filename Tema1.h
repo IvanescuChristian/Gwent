@@ -48,6 +48,9 @@ namespace m1
             int shield;
             bool isDead;
             bool warHorn;
+            int damage;
+            int regen;
+            int shieldRegen;
         };
 
         Tema1();
