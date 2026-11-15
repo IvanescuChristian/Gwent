@@ -84,14 +84,9 @@ void Tema1::Init()
     draggedCard = -1;
     dealIndex = 0;
 
-    float handWidth = kCardsInHand * cardWidth + (kCardsInHand - 1) * cardGap;
-    float firstCardX = (boardLeft + boardRight) / 2 - handWidth / 2 + cardWidth / 2;
     float slotSpacing = (boardRight - boardLeft) / kCardsInHand;
 
     for (int i = 0; i < kCardsInHand; i++) {
-        handSpots[0][i] = glm::vec2(firstCardX + i * (cardWidth + cardGap), playerHandY);
-        handSpots[1][i] = glm::vec2(firstCardX + i * (cardWidth + cardGap), enemyHandY);
-
         float slotX = boardLeft + (i + 0.5f) * slotSpacing;
         slots[0][i] = glm::vec2(slotX, (boardBottom + boardMiddle) / 2);
         slots[1][i] = glm::vec2(slotX, (boardMiddle + boardTop) / 2);
@@ -124,29 +119,35 @@ void Tema1::Init()
     Mesh* cardBorder = tema1Object2D::CreateRectangle("card_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.1f, 0.1f, 0.1f));
     AddMeshToList(cardBorder);
 
-    Mesh* stripeDamage = tema1Object2D::CreateRectangle("stripe_damage", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.85f, 0.15f, 0.15f), true);
-    AddMeshToList(stripeDamage);
+    typeColors[kDamage] = glm::vec3(0.85f, 0.15f, 0.15f);
+    typeColors[kHeal] = glm::vec3(0.15f, 0.75f, 0.25f);
+    typeColors[kShield] = glm::vec3(0.15f, 0.35f, 0.90f);
+    typeColors[kSpy] = glm::vec3(0.05f, 0.05f, 0.05f);
+    typeColors[kFrost] = glm::vec3(0.75f, 0.85f, 0.95f);
+    typeColors[kClear] = glm::vec3(0.95f, 0.85f, 0.10f);
+    typeColors[kWarHorn] = glm::vec3(1.0f, 0.55f, 0.10f);
+    typeColors[kScorch] = glm::vec3(0.60f, 0.20f, 0.80f);
 
-    Mesh* stripeHeal = tema1Object2D::CreateRectangle("stripe_heal", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.15f, 0.75f, 0.25f), true);
-    AddMeshToList(stripeHeal);
+    for (int type = 0; type < kTypeCount; type++) {
+        glm::vec3 color = typeColors[type];
+        glm::vec3 symbolColor = (type == kFrost) ? glm::vec3(0.45f, 0.65f, 0.90f) : color;
+        string id = to_string(type);
 
-    Mesh* stripeShield = tema1Object2D::CreateRectangle("stripe_shield", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.15f, 0.35f, 0.90f), true);
-    AddMeshToList(stripeShield);
+        Mesh* stripe = tema1Object2D::CreateRectangle("stripe_" + id, stripeCorner, cardWidth, stripeHeight, color, true);
+        AddMeshToList(stripe);
 
-    Mesh* stripeSpy = tema1Object2D::CreateRectangle("stripe_spy", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.05f, 0.05f, 0.05f), true);
-    AddMeshToList(stripeSpy);
+        Mesh* symbolTriangle = tema1Object2D::CreateTriangle("symbol_triangle_" + id, glm::vec3(0, 0, 0), 20, symbolColor, true);
+        AddMeshToList(symbolTriangle);
 
-    Mesh* stripeFrost = tema1Object2D::CreateRectangle("stripe_frost", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.75f, 0.85f, 0.95f), true);
-    AddMeshToList(stripeFrost);
+        Mesh* symbolSquare = tema1Object2D::CreateSquare("symbol_square_" + id, glm::vec3(-8, -8, 0), 16, symbolColor, true);
+        AddMeshToList(symbolSquare);
 
-    Mesh* stripeClear = tema1Object2D::CreateRectangle("stripe_clear", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.95f, 0.85f, 0.10f), true);
-    AddMeshToList(stripeClear);
+        Mesh* symbolBar = tema1Object2D::CreateRectangle("symbol_bar_" + id, glm::vec3(-11, -3, 0), 22, 6, symbolColor, true);
+        AddMeshToList(symbolBar);
+    }
 
-    Mesh* stripeWarHorn = tema1Object2D::CreateRectangle("stripe_war_horn", stripeCorner, cardWidth, stripeHeight, glm::vec3(1.0f, 0.55f, 0.10f), true);
-    AddMeshToList(stripeWarHorn);
-
-    Mesh* stripeScorch = tema1Object2D::CreateRectangle("stripe_scorch", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.60f, 0.20f, 0.80f), true);
-    AddMeshToList(stripeScorch);
+    Mesh* valueSquare = tema1Object2D::CreateSquare("value_square", glm::vec3(-3, -3, 0), 6, glm::vec3(0.15f, 0.15f, 0.15f), true);
+    AddMeshToList(valueSquare);
 
     Mesh* infinity =tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
     AddMeshToList(infinity);
@@ -192,7 +193,15 @@ void Tema1::WorldStart()
             Card &card = cards[owner * kCardsInHand + i];
             card.position = deckPositions[owner];
             card.targetPosition = card.position;
-            card.type = i % kTypeCount;
+            card.handPosition = card.position;
+            if (i < 3) {
+                card.type = i;
+            } else if (i < 7) {
+                card.type = rand() % 3;
+            } else {
+                card.type = 3 + rand() % (kTypeCount - 3);
+            }
+
             card.isPermanent = card.type == kDamage || card.type == kHeal || card.type == kShield;
             card.value = (card.type == kDamage || card.type == kScorch) ? 2 : 1;
             card.roundPlaced = -1;
@@ -355,9 +364,9 @@ void Tema1::UpdateDeal(float deltaTimeSeconds)
 
     glm::vec2 deckTop = deckPositions[owner] + glm::vec2((deckSize - 1) * 2.0f, (deckSize - 1) * 2.0f);
     card.position = deckTop;
-    card.targetPosition = handSpots[owner][spot];
     card.isInDeck = false;
     card.flipOnArrival = (owner == 0);
+    ArrangeHand(owner);
 
     dealIndex++;
 }
@@ -415,13 +424,20 @@ void Tema1::RenderCard(const Card &card)
         return;
     }
 
-    string stripeNames[kTypeCount] = { "stripe_damage", "stripe_heal", "stripe_shield", "stripe_spy", "stripe_frost", "stripe_clear", "stripe_war_horn", "stripe_scorch" };
     float stripeY[3] = { cardHeight / 2 - stripeHeight / 2, 0, -cardHeight / 2 + stripeHeight / 2 };
 
     for (int i = 0; i < 3; i++) {
         modelMatrix = cardMatrix;
         modelMatrix *= tema1Transform2D::Translate(0, stripeY[i]);
-        RenderMesh2D(meshes[stripeNames[card.type]], shaders["VertexColor"], modelMatrix);
+        RenderMesh2D(meshes["stripe_" + to_string(card.type)], shaders["VertexColor"], modelMatrix);
+    }
+
+    RenderSymbol(card.type, cardMatrix);
+
+    for (int i = 0; i < card.value && i < 10; i++) {
+        modelMatrix = cardMatrix;
+        modelMatrix *= tema1Transform2D::Translate((i < 5) ? -33.0f : 33.0f, 46.0f - (i % 5) * 8);
+        RenderMesh2D(meshes["value_square"], shaders["VertexColor"], modelMatrix);
     }
 
     if (card.isPermanent) {
@@ -440,6 +456,52 @@ void Tema1::RenderCard(const Card &card)
 
     if (!card.isPermanent) {
         RenderCardText(card, cardMatrix, to_string(card.durability), -37);
+    }
+}
+
+
+void Tema1::RenderSymbol(int type, const glm::mat3 &cardMatrix)
+{
+    string id = to_string(type);
+    glm::mat3 symbolMatrix = cardMatrix;
+    symbolMatrix *= tema1Transform2D::Translate(0, 32);
+
+    if (type == kDamage) {
+        RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], symbolMatrix);
+    } else if (type == kHeal) {
+        RenderMesh2D(meshes["symbol_bar_" + id], shaders["VertexColor"], symbolMatrix);
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Rotate(glm::pi<float>() / 2);
+        RenderMesh2D(meshes["symbol_bar_" + id], shaders["VertexColor"], modelMatrix);
+    } else if (type == kShield) {
+        RenderMesh2D(meshes["symbol_square_" + id], shaders["VertexColor"], symbolMatrix);
+    } else if (type == kSpy) {
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Rotate(glm::pi<float>() / 4);
+        RenderMesh2D(meshes["symbol_square_" + id], shaders["VertexColor"], modelMatrix);
+    } else if (type == kFrost) {
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Rotate(glm::pi<float>() / 4);
+        RenderMesh2D(meshes["symbol_bar_" + id], shaders["VertexColor"], modelMatrix);
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Rotate(-glm::pi<float>() / 4);
+        RenderMesh2D(meshes["symbol_bar_" + id], shaders["VertexColor"], modelMatrix);
+    } else if (type == kClear) {
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Scale(1, -1);
+        RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], modelMatrix);
+    } else if (type == kWarHorn) {
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Rotate(-glm::pi<float>() / 2);
+        RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], modelMatrix);
+    } else if (type == kScorch) {
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Translate(0, -3);
+        RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], modelMatrix);
+        modelMatrix = symbolMatrix;
+        modelMatrix *= tema1Transform2D::Translate(0, 8);
+        modelMatrix *= tema1Transform2D::Scale(0.5f, 0.5f);
+        RenderMesh2D(meshes["symbol_triangle_" + id], shaders["VertexColor"], modelMatrix);
     }
 }
 
@@ -582,6 +644,55 @@ void Tema1::PlaceCard(int index, int slot)
         card.value *= 2;
         owner.warHorn = false;
     }
+
+    ArrangeHand(card.owner);
+}
+
+
+void Tema1::ArrangeHand(int owner)
+{
+    int inHand[kCardsInHand];
+    int inDeck[kCardsInHand];
+    int n = 0;
+    int m = 0;
+
+    for (int i = 0; i < kCardsInHand; i++) {
+        int index = handSpotCard[owner][i];
+
+        if (index == -1) {
+            continue;
+        }
+
+        if (cards[index].isInDeck) {
+            inDeck[m++] = index;
+        } else {
+            inHand[n++] = index;
+        }
+    }
+
+    for (int i = 0; i < kCardsInHand; i++) {
+        handSpotCard[owner][i] = -1;
+    }
+
+    float handY = (owner == 0) ? playerHandY : enemyHandY;
+    float rowWidth = n * cardWidth + (n - 1) * cardGap;
+    float firstX = (boardLeft + boardRight) / 2 - rowWidth / 2 + cardWidth / 2;
+
+    for (int k = 0; k < n; k++) {
+        Card &card = cards[inHand[k]];
+        handSpotCard[owner][k] = inHand[k];
+        card.handSpot = k;
+        card.handPosition = glm::vec2(firstX + k * (cardWidth + cardGap), handY);
+
+        if (inHand[k] != draggedCard) {
+            card.targetPosition = card.handPosition;
+        }
+    }
+
+    for (int k = 0; k < m; k++) {
+        handSpotCard[owner][n + k] = inDeck[k];
+        cards[inDeck[k]].handSpot = n + k;
+    }
 }
 
 
@@ -637,7 +748,6 @@ void Tema1::StealCard(int thief)
 
     card.owner = thief;
     card.handSpot = freeSpot;
-    card.targetPosition = handSpots[thief][freeSpot];
     card.angle = (thief == 1) ? glm::pi<float>() : 0;
     card.isHidden = (thief == 1);
 
@@ -646,6 +756,9 @@ void Tema1::StealCard(int thief)
     if (card.state.isFlipped != faceUp) {
         FlipCard(card);
     }
+
+    ArrangeHand(victim);
+    ArrangeHand(thief);
 }
 
 
@@ -957,17 +1070,17 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
 
         if (glm::length(mousePosition - pressPosition) < clickThreshold) {
             FlipCard(card);
-            card.targetPosition = handSpots[0][card.handSpot];
+            card.targetPosition = card.handPosition;
             draggedCard = -1;
             return;
         }
 
         int slot = GetFreeSlotUnderMouse(mousePosition);
 
-        bool overEnemySide = mousePosition.x >= boardLeft && mousePosition.x <= boardRight &&
-            mousePosition.y >= boardMiddle && mousePosition.y <= boardTop;
+        bool overBoard = mousePosition.x >= boardLeft && mousePosition.x <= boardRight &&
+            mousePosition.y >= boardBottom && mousePosition.y <= boardTop;
 
-        if (slot == -1 && overEnemySide) {
+        if (slot == -1 && overBoard) {
             slot = GetFirstFreeSlot(0);
         }
 
@@ -978,7 +1091,7 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
             return;
         }
 
-        card.targetPosition = handSpots[0][card.handSpot];
+        card.targetPosition = card.handPosition;
         draggedCard = -1;
     }
 }

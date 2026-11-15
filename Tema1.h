@@ -18,6 +18,7 @@ namespace m1
         {
             glm::vec2 position;
             glm::vec2 targetPosition;
+            glm::vec2 handPosition;
             int type;
             int value;
             float scale;
@@ -72,6 +73,7 @@ namespace m1
         void FlipCard(Card &card);
         void RenderBoard();
         void RenderCard(const Card &card);
+        void RenderSymbol(int type, const glm::mat3 &cardMatrix);
         void RenderCardText(const Card &card, const glm::mat3 &cardMatrix, const std::string &text, float localY);
         void RenderSlots();
         void RenderDeck(int owner);
@@ -84,6 +86,7 @@ namespace m1
         void UpdateEnemyTurn(float deltaTimeSeconds);
         void EndTurn();
         void PlaceCard(int index, int slot);
+        void ArrangeHand(int owner);
         void DestroyCard(Card &card);
         void StealCard(int thief);
         void ApplyEffects();
@@ -109,6 +112,7 @@ namespace m1
         static const int kTotalCards = 2 * kCardsInHand;
         static const int kTypeCount = 8;
         Card cards[kTotalCards];
+        glm::vec3 typeColors[kTypeCount];
 
         static const int kDamage = 0;
         static const int kHeal = 1;
@@ -134,7 +138,6 @@ namespace m1
         glm::vec2 pressPosition;
         float clickThreshold;
 
-        glm::vec2 handSpots[2][kCardsInHand];
         int handSpotCard[2][kCardsInHand];
         glm::vec2 slots[2][kCardsInHand];
         bool slotTaken[2][kCardsInHand];
