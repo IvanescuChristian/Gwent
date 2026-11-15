@@ -96,3 +96,30 @@ Mesh* tema1Object2D::CreateTriangle(
     triangle->InitFromData(vertices, indices);
     return triangle;
 }
+
+
+Mesh* tema1Object2D::CreateInfinity(
+    const std::string &name,
+    glm::vec3 center,
+    float size,
+    glm::vec3 color)
+{
+    int pointCount = 40;
+    float a = size / 2;
+
+    std::vector<VertexFormat> vertices;
+    std::vector<unsigned int> indices;
+
+    for (int i = 0; i < pointCount; i++) {
+        float t = 2 * glm::pi<float>() * i / pointCount;
+        float d = 1 + glm::sin(t) * glm::sin(t);
+        vertices.push_back(VertexFormat(center + glm::vec3(a * glm::cos(t) / d, a * glm::sin(t) * glm::cos(t) / d, 0), color));
+        indices.push_back(i);
+    }
+
+    Mesh* infinity = new Mesh(name);
+    infinity->SetDrawMode(GL_LINE_LOOP);
+
+    infinity->InitFromData(vertices, indices);
+    return infinity;
+}

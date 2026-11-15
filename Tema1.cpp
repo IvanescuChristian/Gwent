@@ -12,9 +12,8 @@ using namespace std;
 using namespace m1;
 
 
-// The two players: health is shown next to the hearts, the enemy's isTurn is always our negated value
-Tema1::Player player = { 10, true, 9 };
-Tema1::Player enemy = { 10, !player.isTurn, 9 };
+Tema1::Player player = { 10, true, 9, 0 };
+Tema1::Player enemy = { 10, !player.isTurn, 9, 0 };
 
 
 /*
@@ -61,16 +60,22 @@ void Tema1::Init()
     speed = 600;
 
     cardGap = 8;
+    stripeHeight = 8;
     clickThreshold = 5;
 
     deckX = boardRight + 30 + cardWidth / 2;
     deckY = boardMiddle;
 
-    heartX = boardLeft - 90;
+    heartX = boardLeft - 170;
     playerHeartY = boardMiddle - 70;
     enemyHeartY = boardMiddle + 70;
 
+    unitWidth = 9;
+    unitHeight = 18;
+    unitGap = 3;
+
     glm::vec3 cardCorner = glm::vec3(-cardWidth / 2, -cardHeight / 2, 0);
+    glm::vec3 stripeCorner = glm::vec3(-cardWidth / 2, -stripeHeight / 2, 0);
 
     Mesh* enemyBoard = tema1Object2D::CreateRectangle("enemy_board", glm::vec3(0, 0, 0), boardRight - boardLeft, boardTop - boardMiddle, glm::vec3(0.20f, 0.11f, 0.15f), true);
     AddMeshToList(enemyBoard);
@@ -96,13 +101,30 @@ void Tema1::Init()
     Mesh* cardBorder = tema1Object2D::CreateRectangle("card_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.1f, 0.1f, 0.1f));
     AddMeshToList(cardBorder);
 
+    Mesh* stripeDamage = tema1Object2D::CreateRectangle("stripe_damage", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.85f, 0.15f, 0.15f), true);
+    AddMeshToList(stripeDamage);
+
+    Mesh* stripeHeal = tema1Object2D::CreateRectangle("stripe_heal", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.15f, 0.75f, 0.25f), true);
+    AddMeshToList(stripeHeal);
+
+    Mesh* stripeShield = tema1Object2D::CreateRectangle("stripe_shield", stripeCorner, cardWidth, stripeHeight, glm::vec3(0.15f, 0.35f, 0.90f), true);
+    AddMeshToList(stripeShield);
+
+    Mesh* infinity = tema1Object2D::CreateInfinity("infinity", glm::vec3(0, 0, 0), 24, glm::vec3(0, 0, 0));
+    AddMeshToList(infinity);
+
     Mesh* slotBorder = tema1Object2D::CreateRectangle("slot_border", cardCorner, cardWidth, cardHeight, glm::vec3(0.25f, 0.32f, 0.45f));
     AddMeshToList(slotBorder);
 
-    Mesh* heart =tema1Object2D::CreateTriangle("heart", glm::vec3(0, 0, 0), 40, glm::vec3(0.9f, 0.1f, 0.15f), true);
+    Mesh* heart = tema1Object2D::CreateTriangle("heart", glm::vec3(0, 0, 0), 40, glm::vec3(0.9f, 0.1f, 0.15f), true);
     AddMeshToList(heart);
 
-    // The hand: 9 cards, one next to another, centered under the board
+    Mesh* healthUnit = tema1Object2D::CreateRectangle("health_unit", glm::vec3(0, -unitHeight / 2, 0), unitWidth, unitHeight, glm::vec3(0.9f, 0.1f, 0.15f), true);
+    AddMeshToList(healthUnit);
+
+    Mesh* shieldUnit = tema1Object2D::CreateRectangle("shield_unit", glm::vec3(0, -unitHeight / 2, 0), unitWidth, unitHeight, glm::vec3(0.35f, 0.75f, 1.0f), true);
+    AddMeshToList(shieldUnit);
+
     float handWidth = kCardsInHand * cardWidth + (kCardsInHand - 1) * cardGap;
     float firstCardX = (boardLeft + boardRight) / 2 - handWidth / 2 + cardWidth / 2;
 
@@ -111,23 +133,23 @@ void Tema1::Init()
         card.position = glm::vec2(firstCardX + i * (cardWidth + cardGap), playerHandY);
         card.targetPosition = card.position;
         card.handPosition = card.position;
-        card.type = 0;
-        card.value = 4;
+        card.type = i % 3;
+        card.value = 1;
         card.scale = 1;
         card.angle = 0;
         card.state.isFlipped = false;
         card.isOnTable = false;
+        card.isHidden = false;
 
-        // Mirrored card in the opponent hand: same card, rotated 180 degrees
         Card &enemyCard = enemyCards[i];
         enemyCard = card;
+        enemyCard.isHidden = true;
         enemyCard.position = glm::vec2(card.position.x, enemyHandY);
         enemyCard.targetPosition = enemyCard.position;
         enemyCard.handPosition = enemyCard.position;
         enemyCard.angle = glm::pi<float>();
     }
 
-    // The table: 9 slots per player, spread over the width of the board
     float slotSpacing = (boardRight - boardLeft) / kCardsInHand;
 
     for (int i = 0; i < kCardsInHand; i++) {
@@ -152,6 +174,10 @@ void Tema1::Init()
     textRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
 
     textRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 24);
+
+    cardTextRenderer = new gfxc::TextRenderer(window->props.selfDir, resolution.x, resolution.y);
+
+    cardTextRenderer->Load(PATH_JOIN(window->props.selfDir, RESOURCE_PATH::FONTS, "Hack-Bold.ttf"), 10);
 }
 
 
@@ -195,7 +221,6 @@ void Tema1::Update(float deltaTimeSeconds)
         }
     }
 
-    // The dragged card is drawn last, so it stays on top of the others
     if (draggedCard != -1) {
         RenderCard(playerCards[draggedCard], false);
     }
@@ -231,16 +256,54 @@ void Tema1::RenderCard(const Card &card, bool isEnemy)
     cardMatrix *= tema1Transform2D::Rotate(card.angle);
     cardMatrix *= tema1Transform2D::Scale(card.scale, card.scale);
 
-    // Not flipped: we see the backside. Flipped: we see the front side
-    if (card.state.isFlipped) {
-        RenderMesh2D(meshes["card_front"], shaders["VertexColor"], cardMatrix);
-    } else if (isEnemy) {
-        RenderMesh2D(meshes["card_back_enemy"], shaders["VertexColor"], cardMatrix);
-    } else {
-        RenderMesh2D(meshes["card_back_player"], shaders["VertexColor"], cardMatrix);
+    if (!card.state.isFlipped) {
+        if (isEnemy) {
+            RenderMesh2D(meshes["card_back_enemy"], shaders["VertexColor"], cardMatrix);
+        } else {
+            RenderMesh2D(meshes["card_back_player"], shaders["VertexColor"], cardMatrix);
+        }
+
+        RenderMesh2D(meshes["card_border"], shaders["VertexColor"], cardMatrix);
+        return;
     }
 
+    RenderMesh2D(meshes["card_front"], shaders["VertexColor"], cardMatrix);
+
+    if (card.isHidden) {
+        RenderMesh2D(meshes["card_border"], shaders["VertexColor"], cardMatrix);
+        return;
+    }
+
+    string stripeNames[3] = { "stripe_damage", "stripe_heal", "stripe_shield" };
+    float stripeY[3] = { cardHeight / 2 - stripeHeight / 2, 0, -cardHeight / 2 + stripeHeight / 2 };
+
+    for (int i = 0; i < 3; i++) {
+        modelMatrix = cardMatrix;
+        modelMatrix *= tema1Transform2D::Translate(0, stripeY[i]);
+        RenderMesh2D(meshes[stripeNames[card.type]], shaders["VertexColor"], modelMatrix);
+    }
+
+    modelMatrix = cardMatrix;
+    modelMatrix *= tema1Transform2D::Translate(0, -42);
+    RenderMesh2D(meshes["infinity"], shaders["VertexColor"], modelMatrix);
+
     RenderMesh2D(meshes["card_border"], shaders["VertexColor"], cardMatrix);
+
+    string durabilityText = "durability:";
+    float textWidth = 0;
+
+    for (char c : durabilityText) {
+        textWidth += (cardTextRenderer->Characters[c].Advance >> 6);
+    }
+
+    glm::vec3 textPosition = cardMatrix * glm::vec3(0, -22, 1);
+    float textY = logicHeight - textPosition.y;
+
+    if (isEnemy) {
+        textY -= 10;
+    }
+
+    cardTextRenderer->RenderText(durabilityText, textPosition.x - textWidth / 2, textY, 1.0f, glm::vec3(0, 0, 0));
 }
 
 
@@ -260,7 +323,6 @@ void Tema1::RenderSlots()
 
 void Tema1::RenderDeck()
 {
-    // Just a visual stack of cards, each one slightly offset from the one below
     int deckSize = 6;
 
     for (int i = 0; i < deckSize; i++) {
@@ -274,30 +336,40 @@ void Tema1::RenderDeck()
 
 void Tema1::RenderHearts()
 {
-    // Our heart: the triangle mirrored, so it points downwards
     modelMatrix = glm::mat3(1);
     modelMatrix *= tema1Transform2D::Translate(heartX, playerHeartY);
     modelMatrix *= tema1Transform2D::Scale(1, -1);
     RenderMesh2D(meshes["heart"], shaders["VertexColor"], modelMatrix);
 
-    // Enemy heart: flipped compared to ours, so it points upwards
     modelMatrix = glm::mat3(1);
     modelMatrix *= tema1Transform2D::Translate(heartX, enemyHeartY);
     RenderMesh2D(meshes["heart"], shaders["VertexColor"], modelMatrix);
+
+    RenderLifeBar(player, playerHeartY, playerHeartY - unitHeight - 6);
+    RenderLifeBar(enemy, enemyHeartY, enemyHeartY + unitHeight + 6);
+}
+
+
+void Tema1::RenderLifeBar(const Player &owner, float y, float shieldY)
+{
+    float barX = heartX + 30;
+
+    for (int i = 0; i < owner.health; i++) {
+        modelMatrix = glm::mat3(1);
+        modelMatrix *= tema1Transform2D::Translate(barX + i * (unitWidth + unitGap), y);
+        RenderMesh2D(meshes["health_unit"], shaders["VertexColor"], modelMatrix);
+    }
+
+    for (int i = 0; i < owner.shield; i++) {
+        modelMatrix = glm::mat3(1);
+        modelMatrix *= tema1Transform2D::Translate(barX + i * (unitWidth + unitGap), shieldY);
+        RenderMesh2D(meshes["shield_unit"], shaders["VertexColor"], modelMatrix);
+    }
 }
 
 
 void Tema1::DrawHUD()
 {
-    // The text renderer uses screen coordinates, with (0, 0) in the top-left corner
-    glm::vec3 kTextColor = glm::vec3(1, 1, 1);
-    float textX = heartX + 30;
-
-    textRenderer->RenderText(to_string(player.health), textX, logicHeight - playerHeartY - 12, 1.0f, kTextColor);
-    textRenderer->RenderText(to_string(enemy.health), textX, logicHeight - enemyHeartY - 12, 1.0f, kTextColor);
-
-    // Whose turn it is, top right. Grey with alpha 0.5: the text renderer only takes an RGB color,
-    // so the grey is blended by hand with the background it is drawn over
     glm::vec3 kGrey = glm::vec3(0.5f, 0.5f, 0.5f);
     float kAlpha = 0.5f;
     glm::vec3 kTurnColor = kAlpha * kGrey + (1 - kAlpha) * kBackgroundColor;
@@ -317,16 +389,48 @@ void Tema1::EndTurn()
 }
 
 
+void Tema1::ApplyCard(const Card &card, Player &owner, Player &opponent)
+{
+    if (card.type == kDamage) {
+        int blocked = min(opponent.shield, card.value);
+        opponent.shield -= blocked;
+        opponent.health = max(0, opponent.health - (card.value - blocked));
+    } else if (card.type == kHeal) {
+        owner.health = min(kMaxHealth, owner.health + card.value);
+    } else if (card.type == kShield) {
+        owner.shield = min(kMaxShield, owner.shield + card.value);
+    }
+}
+
+
+void Tema1::ApplyEffects()
+{
+    int order[3] = { kDamage, kHeal, kShield };
+
+    for (int type : order) {
+        for (int i = 0; i < kCardsInHand; i++) {
+            if (playerCards[i].isOnTable && playerCards[i].type == type) {
+                ApplyCard(playerCards[i], player, enemy);
+            }
+        }
+
+        for (int i = 0; i < kCardsInHand; i++) {
+            if (enemyCards[i].isOnTable && enemyCards[i].type == type) {
+                ApplyCard(enemyCards[i], enemy, player);
+            }
+        }
+    }
+}
+
+
 void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
 {
-    // One step every enemyStepDelay seconds
     enemyTimer += deltaTimeSeconds;
     if (enemyTimer < enemyStepDelay) {
         return;
     }
     enemyTimer = 0;
 
-    // First the cards in hand flip one by one, left to right
     while (enemyFlipIndex < kCardsInHand && enemyCards[enemyFlipIndex].isOnTable) {
         enemyFlipIndex++;
     }
@@ -337,9 +441,7 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         return;
     }
 
-    // Then a random card (1 in cardsLeft) goes into a random free slot
     if (enemy.cardsLeft > 0) {
-        // Pick the n-th card still in hand and the m-th free slot (free slots = cards left in hand)
         int n = rand() % enemy.cardsLeft;
         int m = rand() % enemy.cardsLeft;
         int chosenCard = -1;
@@ -366,10 +468,10 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         Card &card = enemyCards[chosenCard];
         card.targetPosition = enemySlots[chosenSlot];
         card.isOnTable = true;
+        card.isHidden = false;
         enemySlotTaken[chosenSlot] = true;
         enemy.cardsLeft--;
 
-        // The cards left in hand go back face down
         for (int i = 0; i < kCardsInHand; i++) {
             if (!enemyCards[i].isOnTable) {
                 enemyCards[i].state.isFlipped = false;
@@ -377,6 +479,7 @@ void Tema1::UpdateEnemyTurn(float deltaTimeSeconds)
         }
     }
 
+    ApplyEffects();
     EndTurn();
 }
 
@@ -456,7 +559,6 @@ void Tema1::OnMouseMove(int mouseX, int mouseY, int deltaX, int deltaY)
 {
     // Add mouse move event
     if (draggedCard != -1) {
-        // The card follows the cursor while it is dragged
         Card &card = playerCards[draggedCard];
         card.position = ScreenToWorld(mouseX, mouseY) - dragOffset;
         card.targetPosition = card.position;
@@ -470,8 +572,6 @@ void Tema1::OnMouseBtnPress(int mouseX, int mouseY, int button, int mods)
     if (IS_BIT_SET(button, GLFW_MOUSE_BUTTON_LEFT)) {
         glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
 
-        // Drag: start only if we clicked on one of our cards in hand
-        // (the enemy cards and the cards on the table can't be clicked)
         for (int i = 0; i < kCardsInHand; i++) {
             if (!playerCards[i].isOnTable && IsMouseOverCard(playerCards[i], mousePosition)) {
                 draggedCard = i;
@@ -491,7 +591,6 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
         Card &card = playerCards[draggedCard];
         glm::vec2 mousePosition = ScreenToWorld(mouseX, mouseY);
 
-        // Click (the mouse barely moved): the card switches sides
         if (glm::length(mousePosition - pressPosition) < clickThreshold) {
             card.state.isFlipped = !card.state.isFlipped;
             card.targetPosition = card.handPosition;
@@ -499,7 +598,6 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
             return;
         }
 
-        // Drop on a free slot during our turn: the card goes on the table and the turn ends
         int slot = GetFreeSlotUnderMouse(mousePosition);
 
         if (player.isTurn && slot != -1) {
@@ -512,7 +610,6 @@ void Tema1::OnMouseBtnRelease(int mouseX, int mouseY, int button, int mods)
             return;
         }
 
-        // Drop anywhere else: the card goes back to its place in our hand (UpdateCard moves it there)
         card.targetPosition = card.handPosition;
         draggedCard = -1;
     }

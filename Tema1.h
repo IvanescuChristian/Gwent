@@ -25,6 +25,7 @@ namespace m1
             float angle;
             CardState state;
             bool isOnTable;
+            bool isHidden;
         };
 
         struct Player
@@ -32,6 +33,7 @@ namespace m1
             int health;
             bool isTurn;
             int cardsLeft;
+            int shield;
         };
 
         Tema1();
@@ -58,12 +60,15 @@ namespace m1
         void RenderSlots();
         void RenderDeck();
         void RenderHearts();
-        void UpdateEnemyTurn(float deltaTimeSeconds);
-        void EndTurn();
-        int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
+        void RenderLifeBar(const Player &owner, float y, float shieldY);
         // Draw the heads-up display
         void DrawHUD();
         void UpdateCard(Card &card, float deltaTimeSeconds);
+        void UpdateEnemyTurn(float deltaTimeSeconds);
+        void EndTurn();
+        void ApplyEffects();
+        void ApplyCard(const Card &card, Player &owner, Player &opponent);
+        int GetFreeSlotUnderMouse(glm::vec2 mousePosition);
         glm::vec2 ScreenToWorld(int mouseX, int mouseY);
         bool IsMouseOverCard(const Card &card, glm::vec2 mousePosition);
 
@@ -81,22 +86,28 @@ namespace m1
         Card playerCards[kCardsInHand];
         Card enemyCards[kCardsInHand];
 
+        static const int kDamage = 0;
+        static const int kHeal = 1;
+        static const int kShield = 2;
+        static const int kMaxHealth = 10;
+        static const int kMaxShield = 10;
+
         float cardGap;
+        float stripeHeight;
         float deckX, deckY;
         float heartX, playerHeartY, enemyHeartY;
+        float unitWidth, unitHeight, unitGap;
 
         int draggedCard;
         glm::vec2 dragOffset;
         glm::vec2 pressPosition;
         float clickThreshold;
 
-        // The 9 slots on the table for each player
         glm::vec2 playerSlots[kCardsInHand];
         glm::vec2 enemySlots[kCardsInHand];
         bool playerSlotTaken[kCardsInHand];
         bool enemySlotTaken[kCardsInHand];
 
-        // Simulated enemy turn: flips its cards one by one, then places a random one
         float enemyTimer;
         float enemyStepDelay;
         int enemyFlipIndex;
@@ -106,5 +117,6 @@ namespace m1
 
         // The actual renderer object
         gfxc::TextRenderer *textRenderer;
+        gfxc::TextRenderer *cardTextRenderer;
     };
 }   // namespace m1
